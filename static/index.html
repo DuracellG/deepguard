@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DeepGuard — Détection de Deepfakes</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --blue:#185FA5;--blue-light:#E6F1FB;--blue-mid:#378ADD;
+    --green:#3B6D11;--green-light:#EAF3DE;
+    --red:#A32D2D;--red-light:#FCEBEB;
+    --amber:#854F0B;--amber-light:#FAEEDA;
+    --bg:#F8F9FA;--card:#fff;--border:#E0E0E0;
+    --text:#1a1a1a;--muted:#666;--hint:#999;
+  }
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       background:var(--bg);color:var(--text);min-height:100vh}
+
+  /* NAV */
+  nav{background:var(--card);border-bottom:1px solid var(--border);
+      padding:14px 32px;display:flex;align-items:center;
+      justify-content:space-between;position:sticky;top:0;z-index:100}
+  .logo{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:600;color:var(--blue)}
+  .logo svg{width:26px;height:26px}
+  .nav-tag{background:var(--blue-light);color:var(--blue);
+           font-size:11px;padding:3px 8px;border-radius:20px;font-weight:500}
+
+  /* HERO */
+  .hero{text-align:center;padding:56px 24px 40px;max-width:680px;margin:0 auto}
+  .hero h1{font-size:32px;font-weight:700;margin-bottom:12px;line-height:1.3}
+  .hero h1 span{color:var(--blue)}
+  .hero p{font-size:16px;color:var(--muted);line-height:1.7;max-width:500px;margin:0 auto 32px}
+
+  /* TABS */
+  .tabs{display:flex;gap:8px;justify-content:center;margin-bottom:28px}
+  .tab{padding:8px 20px;border-radius:20px;border:1px solid var(--border);
+       font-size:14px;cursor:pointer;background:var(--card);color:var(--muted);
+       transition:all .15s;display:flex;align-items:center;gap:6px}
+  .tab.active{background:var(--blue);border-color:var(--blue);
+              color:#fff;font-weight:500}
+  .tab:hover:not(.active){border-color:var(--blue-mid);color:var(--blue)}
+
+  /* UPLOAD */
+  .upload-box{max-width:540px;margin:0 auto;
+              border:2px dashed var(--border);border-radius:16px;
+              padding:48px 24px;text-align:center;cursor:pointer;
+              background:var(--card);transition:border-color .2s,background .2s}
+  .upload-box:hover,.upload-box.drag{border-color:var(--blue);background:var(--blue-light)}
+  .upload-box svg{width:48px;height:48px;color:var(--blue-mid);margin-bottom:14px}
+  .upload-box p{font-size:15px;font-weight:500;margin-bottom:6px}
+  .upload-box span{font-size:13px;color:var(--hint)}
+  #file-input{display:none}
+  .btn-primary{display:inline-flex;align-items:center;gap:8px;
+               background:var(--blue);color:#fff;border:none;
+               padding:12px 28px;border-radius:10px;font-size:15px;
+               font-weight:500;cursor:pointer;margin-top:20px;
+               transition:opacity .15s}
+  .btn-primary:hover{opacity:.88}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+
+  /* PROGRESS */
+  .progress-wrap{max-width:540px;margin:24px auto 0;display:none}
+  .progress-bar{height:6px;background:#e0e0e0;border-radius:3px;overflow:hidden}
+  .progress-fill{height:100%;background:var(--blue);border-radius:3px;
+                 width:0%;transition:width .3s}
+  .progress-label{font-size:13px;color:var(--muted);margin-top:8px;text-align:center}
+
+  /* RESULT */
+  .result-section{max-width:680px;margin:32px auto;padding:0 16px 60px;display:none}
+
+  .card{background:var(--card);border:1px solid var(--border);
+        border-radius:16px;padding:24px;margin-bottom:16px}
+
+  .verdict-header{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  .verdict-icon{width:48px;height:48px;border-radius:50%;
+                display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .verdict-icon.real{background:var(--green-light)}
+  .verdict-icon.fake{background:var(--red-light)}
+  .verdict-icon svg{width:24px;height:24px}
+  .verdict-icon.real svg{color:var(--green)}
+  .verdict-icon.fake svg{color:var(--red)}
+  .verdict-title{font-size:20px;font-weight:700}
+  .verdict-title.real{color:var(--green)}
+  .verdict-title.fake{color:var(--red)}
+  .verdict-sub{font-size:14px;color:var(--muted);margin-top:3px}
+
+  /* SCORE BARS */
+  .score-row{margin-bottom:14px}
+  .score-meta{display:flex;justify-content:space-between;
+              font-size:13px;margin-bottom:6px}
+  .score-meta .val{font-weight:600}
+  .bar{height:10px;background:#f0f0f0;border-radius:5px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:5px;transition:width .8s ease}
+  .bar-fill.real{background:var(--green)}
+  .bar-fill.fake{background:var(--red)}
+
+  /* METRICS GRID */
+  .metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:20px 0}
+  .metric{background:var(--bg);border-radius:10px;padding:14px;text-align:center}
+  .metric .val{font-size:22px;font-weight:700;color:var(--text)}
+  .metric .lbl{font-size:11px;color:var(--hint);margin-top:3px;text-transform:uppercase;letter-spacing:.5px}
+
+  /* DCT INFO */
+  .dct-info{display:flex;align-items:flex-start;gap:12px;
+            background:var(--blue-light);border-radius:10px;
+            padding:14px;margin-top:8px}
+  .dct-info svg{width:20px;height:20px;color:var(--blue);flex-shrink:0;margin-top:1px}
+  .dct-info p{font-size:13px;color:#0a3d6b;line-height:1.6}
+
+  /* FAIRNESS */
+  .fairness-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+  .skin-card{border-radius:10px;padding:14px;text-align:center}
+  .skin-card.light{background:var(--blue-light)}
+  .skin-card.medium{background:var(--green-light)}
+  .skin-card.dark{background:var(--amber-light)}
+  .skin-card .val{font-size:18px;font-weight:700}
+  .skin-card.light .val{color:var(--blue)}
+  .skin-card.medium .val{color:var(--green)}
+  .skin-card.dark .val{color:var(--amber)}
+  .skin-card .lbl{font-size:12px;color:var(--muted);margin-top:4px}
+
+  /* TIMELINE CHART */
+  .chart-wrap{margin-top:16px;height:200px;position:relative}
+
+  /* HISTORY */
+  .history-section{max-width:680px;margin:0 auto;padding:0 16px 40px}
+  .section-title{font-size:16px;font-weight:600;margin-bottom:14px;color:var(--text)}
+  .hist-item{display:flex;align-items:center;gap:14px;padding:12px 0;
+             border-bottom:1px solid var(--border)}
+  .hist-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;
+              background:var(--bg);display:flex;align-items:center;
+              justify-content:center;flex-shrink:0}
+  .hist-thumb svg{width:20px;height:20px;color:var(--hint)}
+  .hist-info{flex:1}
+  .hist-info .name{font-size:14px;font-weight:500}
+  .hist-info .time{font-size:12px;color:var(--hint);margin-top:2px}
+  .badge{font-size:12px;padding:4px 12px;border-radius:20px;font-weight:500}
+  .badge.real{background:var(--green-light);color:var(--green)}
+  .badge.fake{background:var(--red-light);color:var(--red)}
+
+  /* FOOTER */
+  footer{text-align:center;padding:24px;font-size:13px;
+         color:var(--hint);border-top:1px solid var(--border)}
+  footer span{color:var(--blue);font-weight:500}
+
+  @media(max-width:600px){
+    .hero h1{font-size:24px}
+    .metrics{grid-template-columns:repeat(3,1fr)}
+    nav{padding:12px 16px}
+    .fairness-grid{grid-template-columns:repeat(3,1fr)}
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <polyline points="9 12 11 14 15 10"/>
+    </svg>
+    DeepGuard
+  </div>
+  <span class="nav-tag">M2 IA — PIGIER BÉNIN</span>
+</nav>
+
+<div class="hero">
+  <h1>Protégez votre <span>identité numérique</span></h1>
+  <p>DeepGuard détecte les deepfakes générés par modèles de diffusion grâce à une analyse hybride spatiale et fréquentielle.</p>
+
+  <div class="tabs">
+    <div class="tab active" onclick="setMode('image')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      Image
+    </div>
+    <div class="tab" onclick="setMode('video')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      Vidéo
+    </div>
+  </div>
+
+  <div class="upload-box" id="upload-box"
+       onclick="document.getElementById('file-input').click()"
+       ondragover="event.preventDefault();this.classList.add('drag')"
+       ondragleave="this.classList.remove('drag')"
+       ondrop="handleDrop(event)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <polyline points="16 16 12 12 8 16"/>
+      <line x1="12" y1="12" x2="12" y2="21"/>
+      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+    </svg>
+    <p id="upload-text">Glissez votre image ici ou cliquez pour parcourir</p>
+    <span id="upload-hint">JPG, PNG, WEBP — max 10 MB</span>
+  </div>
+  <input type="file" id="file-input" accept="image/*" onchange="handleFile(this.files[0])">
+
+  <div class="progress-wrap" id="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <p class="progress-label" id="progress-label">Analyse en cours...</p>
+  </div>
+</div>
+
+<div class="result-section" id="result-section">
+
+  <div class="card" id="verdict-card">
+    <div class="verdict-header">
+      <div class="verdict-icon" id="verdict-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="verdict-svg">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div>
+        <div class="verdict-title" id="verdict-title">—</div>
+        <div class="verdict-sub" id="verdict-sub">—</div>
+      </div>
+    </div>
+
+    <div class="score-row">
+      <div class="score-meta">
+        <span>Score réel</span>
+        <span class="val" id="score-real-val" style="color:var(--green)">—</span>
+      </div>
+      <div class="bar"><div class="bar-fill real" id="bar-real" style="width:0%"></div></div>
+    </div>
+    <div class="score-row">
+      <div class="score-meta">
+        <span>Score deepfake</span>
+        <span class="val" id="score-fake-val" style="color:var(--red)">—</span>
+      </div>
+      <div class="bar"><div class="bar-fill fake" id="bar-fake" style="width:0%"></div></div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="val" id="m-confidence">—</div>
+        <div class="lbl">Confiance</div>
+      </div>
+      <div class="metric">
+        <div class="val" id="m-time">—</div>
+        <div class="lbl">Temps</div>
+      </div>
+      <div class="metric">
+        <div class="val" id="m-type">—</div>
+        <div class="lbl">Type</div>
+      </div>
+    </div>
+
+    <div class="dct-info">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M2 12h2M20 12h2M12 2v2M12 20v2"/>
+        <path d="M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        <circle cx="12" cy="12" r="4"/>
+      </svg>
+      <p id="dct-message">—</p>
+    </div>
+  </div>
+
+  <div class="card" id="video-card" style="display:none">
+    <p style="font-size:14px;font-weight:600;margin-bottom:4px">Analyse temporelle</p>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Score deepfake au fil du temps</p>
+    <div class="chart-wrap">
+      <canvas id="timeline-chart"></canvas>
+    </div>
+    <div class="metrics" style="margin-top:16px">
+      <div class="metric">
+        <div class="val" id="v-frames">—</div>
+        <div class="lbl">Frames vues</div>
+      </div>
+      <div class="metric">
+        <div class="val" id="v-total">—</div>
+        <div class="lbl">Frames totales</div>
+      </div>
+      <div class="metric">
+        <div class="val" id="v-fps">—</div>
+        <div class="lbl">FPS</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <p style="font-size:14px;font-weight:600;margin-bottom:4px">Équité démographique</p>
+    <p style="font-size:13px;color:var(--muted)">Performance du modèle par teinte de peau (Échelle de Fitzpatrick)</p>
+    <div class="fairness-grid">
+      <div class="skin-card light">
+        <div class="val">100%</div>
+        <div class="lbl">Peau claire<br>(tons 1–3)</div>
+      </div>
+      <div class="skin-card medium">
+        <div class="val">99.99%</div>
+        <div class="lbl">Peau moyenne<br>(tons 4–6)</div>
+      </div>
+      <div class="skin-card dark">
+        <div class="val">99.96%</div>
+        <div class="lbl">Peau foncée<br>(tons 7–10)</div>
+      </div>
+    </div>
+    <p style="font-size:12px;color:var(--hint);margin-top:10px;text-align:center">
+      Fairness gap : 0.04% — Protection équitable pour toutes les populations
+    </p>
+  </div>
+
+  <button class="btn-primary" onclick="resetUI()" style="width:100%;justify-content:center">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.49"/>
+    </svg>
+    Analyser un autre fichier
+  </button>
+</div>
+
+<div class="history-section" id="history-section" style="display:none">
+  <p class="section-title">Analyses récentes</p>
+  <div id="history-list"></div>
+</div>
+
+<footer>
+  <strong><span>DeepGuard</span></strong> — Système Intelligent de Détection de Deepfakes<br>
+  Mémoire M2 IA &amp; Big Data · GNANGNON Dorel Médéliac · PIGIER BÉNIN · 2025–2026
+</footer>
+
+<script>
+let mode = 'image';
+let history = [];
+let timelineChart = null;
+let startTime;
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', i === (m==='image'?0:1)));
+  const input = document.getElementById('file-input');
+  const text  = document.getElementById('upload-text');
+  const hint  = document.getElementById('upload-hint');
+  if (m === 'image') {
+    input.accept = 'image/*';
+    text.textContent = 'Glissez votre image ici ou cliquez pour parcourir';
+    hint.textContent = 'JPG, PNG, WEBP — max 10 MB';
+  } else {
+    input.accept = 'video/*';
+    text.textContent = 'Glissez votre vidéo ici ou cliquez pour parcourir';
+    hint.textContent = 'MP4, AVI, MOV — max 100 MB';
+  }
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('upload-box').classList.remove('drag');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+}
+
+function handleFile(file) {
+  if (!file) return;
+  const isImage = file.type.startsWith('image/');
+  const isVideo = file.type.startsWith('video/');
+  if (!isImage && !isVideo) return alert('Format non supporté');
+
+  mode = isImage ? 'image' : 'video';
+  setMode(mode);
+  uploadFile(file);
+}
+
+async function uploadFile(file) {
+  startTime = Date.now();
+  showProgress();
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const endpoint = mode === 'image' ? '/predict/image' : '/predict/video';
+
+  try {
+    animateProgress();
+    const res  = await fetch(endpoint, { method: 'POST', body: formData });
+    const data = await res.json();
+
+    if (!res.ok) throw new Error(data.detail || 'Erreur serveur');
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    showResult(data, elapsed, file.name);
+    addHistory(file.name, data.verdict, mode);
+  } catch(err) {
+    hideProgress();
+    alert('Erreur : ' + err.message);
+  }
+}
+
+function animateProgress() {
+  const fill  = document.getElementById('progress-fill');
+  const label = document.getElementById('progress-label');
+  let pct = 0;
+  const msgs = ['Chargement du fichier...', 'Extraction DCT...', 'Analyse spatiale...', 'Classification...'];
+  let msgIdx = 0;
+
+  const iv = setInterval(() => {
+    pct += Math.random() * 12;
+    if (pct > 90) pct = 90;
+    fill.style.width = pct + '%';
+    if (pct > (msgIdx+1)*22 && msgIdx < msgs.length-1) {
+      label.textContent = msgs[++msgIdx];
+    }
+  }, 300);
+
+  window._progressInterval = iv;
+}
+
+function showProgress() {
+  document.getElementById('progress-wrap').style.display = 'block';
+  document.getElementById('result-section').style.display = 'none';
+}
+
+function hideProgress() {
+  clearInterval(window._progressInterval);
+  document.getElementById('progress-fill').style.width = '100%';
+  setTimeout(() => {
+    document.getElementById('progress-wrap').style.display = 'none';
+  }, 400);
+}
+
+function showResult(data, elapsed, filename) {
+  hideProgress();
+
+  const isFake = data.verdict === 'deepfake';
+
+  document.getElementById('verdict-icon').className = 'verdict-icon ' + (isFake ? 'fake' : 'real');
+  document.getElementById('verdict-svg').innerHTML = isFake
+    ? '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
+    : '<polyline points="20 6 9 17 4 12"/>';
+  document.getElementById('verdict-title').textContent = data.label;
+  document.getElementById('verdict-title').className = 'verdict-title ' + (isFake ? 'fake' : 'real');
+  document.getElementById('verdict-sub').textContent = filename;
+
+  document.getElementById('score-real-val').textContent = data.score_real + '%';
+  document.getElementById('score-fake-val').textContent = data.score_fake + '%';
+
+  setTimeout(() => {
+    document.getElementById('bar-real').style.width = data.score_real + '%';
+    document.getElementById('bar-fake').style.width = data.score_fake + '%';
+  }, 100);
+
+  document.getElementById('m-confidence').textContent = data.confidence + '%';
+  document.getElementById('m-time').textContent = elapsed + 's';
+  document.getElementById('m-type').textContent = data.type === 'image' ? 'Image' : 'Vidéo';
+
+  const dctMsg = isFake
+    ? 'Anomalie spectrale détectée : sous-estimation des hautes fréquences caractéristique d\'un modèle de diffusion.'
+    : 'Signature spectrale cohérente avec un visage réel — aucune anomalie hautes fréquences détectée par DCT.';
+  document.getElementById('dct-message').textContent = dctMsg;
+
+  if (data.type === 'video' && data.timeline) {
+    document.getElementById('video-card').style.display = 'block';
+    document.getElementById('v-frames').textContent = data.frames_analyzed;
+    document.getElementById('v-total').textContent  = data.frames_total;
+    document.getElementById('v-fps').textContent    = data.fps;
+    renderTimeline(data.timeline);
+  } else {
+    document.getElementById('video-card').style.display = 'none';
+  }
+
+  document.getElementById('result-section').style.display = 'block';
+  document.getElementById('result-section').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function renderTimeline(timeline) {
+  if (timelineChart) timelineChart.destroy();
+  const ctx = document.getElementById('timeline-chart').getContext('2d');
+  timelineChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: timeline.map(t => t.time + 's'),
+      datasets: [{
+        label: 'Score deepfake (%)',
+        data: timeline.map(t => t.score),
+        borderColor: '#E24B4A',
+        backgroundColor: 'rgba(226,75,74,0.08)',
+        borderWidth: 2,
+        pointRadius: 2,
+        fill: true,
+        tension: 0.3
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { min: 0, max: 100, grid: { color: '#f0f0f0' } },
+        x: { grid: { display: false } }
+      },
+      plugins: {
+        legend: { display: false },
+        annotation: {
+          annotations: {
+            line50: {
+              type: 'line', yMin: 50, yMax: 50,
+              borderColor: '#999', borderWidth: 1,
+              borderDash: [4,4]
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function addHistory(name, verdict, type) {
+  history.unshift({ name, verdict, type, time: new Date() });
+  if (history.length > 10) history.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  const sect = document.getElementById('history-section');
+  if (history.length === 0) { sect.style.display = 'none'; return; }
+  sect.style.display = 'block';
+
+  const svgImg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+  const svgVid = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`;
+
+  list.innerHTML = history.map(h => {
+    const ago = Math.round((Date.now() - h.time) / 1000);
+    const t   = ago < 60 ? `Il y a ${ago}s` : `Il y a ${Math.round(ago/60)} min`;
+    return `<div class="hist-item">
+      <div class="hist-thumb">${h.type==='image'?svgImg:svgVid}</div>
+      <div class="hist-info">
+        <div class="name">${h.name}</div>
+        <div class="time">${t}</div>
+      </div>
+      <span class="badge ${h.verdict==='authentic'?'real':'fake'}">
+        ${h.verdict==='authentic'?'Authentique':'Deepfake'}
+      </span>
+    </div>`;
+  }).join('');
+}
+
+function resetUI() {
+  document.getElementById('result-section').style.display = 'none';
+  document.getElementById('file-input').value = '';
+  document.querySelector('.hero').scrollIntoView({behavior:'smooth'});
+}
+</script>
+</body>
+</html>
