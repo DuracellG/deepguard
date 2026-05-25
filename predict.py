@@ -9,7 +9,8 @@ import torchvision.transforms as T
 from PIL import Image
 from typing import Dict, Any
 
-IMG_SIZE = 224
+IMG_SIZE   = 224
+THRESHOLD  = 0.75   # Seuil conservateur — réduit les faux positifs sur photos mobiles
 
 TRANSFORM = T.Compose([
     T.Resize((IMG_SIZE, IMG_SIZE)),
@@ -43,7 +44,18 @@ def predict_single(model, img: Image.Image, device: str) -> Dict[str, Any]:
 
     score_real = float(probs[0])
     score_fake = float(probs[1])
-    is_fake    = score_fake > 0.5
+
+    # Seuil conservateur à 0.75 pour réduire les faux positifs
+    # sur photos smartphones et visages à peau foncée
+    is_fake    = score_fake > THRESHOLD
+
+    # Niveau de risque
+    if score_fake < 0.50:
+        risk = "Faible"
+    elif score_fake < 0.75:
+        risk = "Modéré"
+    else:
+        risk = "Élevé"
 
     return {
         "verdict"    : "deepfake" if is_fake else "authentic",
@@ -51,6 +63,8 @@ def predict_single(model, img: Image.Image, device: str) -> Dict[str, Any]:
         "score_fake" : round(score_fake * 100, 2),
         "confidence" : round(max(score_real, score_fake) * 100, 2),
         "label"      : "Deepfake détecté" if is_fake else "Authentique",
+        "risk"       : risk,
+        "threshold"  : THRESHOLD * 100,
     }
 
 
@@ -99,7 +113,14 @@ def predict_video(model, video_bytes: bytes, device: str,
 
     mean_score = float(np.mean(scores))
     max_score  = float(np.max(scores))
-    is_fake    = mean_score > 50.0
+    is_fake    = mean_score > (THRESHOLD * 100)
+
+    if mean_score < 50:
+        risk = "Faible"
+    elif mean_score < 75:
+        risk = "Modéré"
+    else:
+        risk = "Élevé"
 
     return {
         "verdict"         : "deepfake" if is_fake else "authentic",
@@ -112,4 +133,6 @@ def predict_video(model, video_bytes: bytes, device: str,
         "frames_analyzed" : len(scores),
         "timeline"        : timeline,
         "fps"             : round(fps, 1),
+        "risk"            : risk,
+        "threshold"       : THRESHOLD * 100,
     }

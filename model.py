@@ -36,8 +36,8 @@ class HybridDeepfakeDetector(nn.Module):
 def load_model(model_path: str, device: str = "cpu") -> HybridDeepfakeDetector:
     """Charge le modèle depuis le fichier .pth."""
     model = HybridDeepfakeDetector().to(device)
-    ckpt  = torch.load(model_path, map_location=device)
-    # Supporte les deux formats de sauvegarde
+    # weights_only=False requis pour charger le dict complet
+    ckpt  = torch.load(model_path, map_location=device, weights_only=False)
     state = ckpt.get("model_state_dict", ckpt)
     model.load_state_dict(state)
     model.eval()
