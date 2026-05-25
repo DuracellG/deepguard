@@ -2,7 +2,6 @@
 
 import os
 import io
-import gdown
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -16,30 +15,17 @@ app        = FastAPI(title="DeepGuard API", version="1.0")
 DEVICE     = "cpu"
 MODEL      = None
 MODEL_PATH = os.getenv("MODEL_PATH", "best_model.pth")
-MODEL_URL  = os.getenv(
-    "MODEL_URL",
-    "https://drive.google.com/uc?id=1XUly96BwbC8xUyZQamQQl91DZbkho8f9"
-)
 
 
 @app.on_event("startup")
 def startup():
-    """Télécharge le modèle depuis Google Drive si absent, puis le charge."""
+    """Charge le modèle depuis le repo au démarrage."""
     global MODEL
-
-    if not os.path.exists(MODEL_PATH):
-        print(f"📥 Modèle absent — téléchargement depuis Google Drive...")
-        try:
-            gdown.download(MODEL_URL, MODEL_PATH, quiet=False, fuzzy=True)
-            print("✅ Téléchargement terminé")
-        except Exception as e:
-            print(f"❌ Échec téléchargement : {e}")
-            return
-
     if os.path.exists(MODEL_PATH):
         MODEL = load_model(MODEL_PATH, DEVICE)
+        print(f"✅ Modèle prêt")
     else:
-        print("❌ Modèle introuvable après téléchargement")
+        print(f"❌ Modèle introuvable : {MODEL_PATH}")
 
 
 # ── Routes API ────────────────────────────────────────────────
@@ -53,29 +39,30 @@ def health():
         "device"      : DEVICE
     }
 
+
 @app.get("/debug")
 def debug():
     """Test rapide du modèle sur une image noire synthétique."""
     import torch
     import numpy as np
-    from PIL import Image
-    from predict import predict_single
-
-    # Image noire 224x224
-    img = Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
+    from PIL import Image as PILImage
+    if MODEL is None:
+        return {"error": "Modèle non chargé"}
+    img    = PILImage.fromarray(
+        __import__('numpy').zeros((224, 224, 3), dtype=__import__('numpy').uint8))
     result = predict_single(MODEL, img, DEVICE)
     return result
+
 
 @app.post("/predict/image")
 async def predict_image(file: UploadFile = File(...)):
     """Analyse une image — retourne verdict + scores."""
     if MODEL is None:
-        raise HTTPException(503, "Modèle non disponible — réessayez dans quelques secondes")
+        raise HTTPException(503, "Modèle non disponible")
 
     if not file.content_type.startswith("image/"):
         raise HTTPException(400, "Fichier image requis (JPG, PNG, WEBP)")
 
-    # Limite taille : 10 MB
     data = await file.read()
     if len(data) > 10 * 1024 * 1024:
         raise HTTPException(400, "Fichier trop volumineux (max 10 MB)")
@@ -94,17 +81,16 @@ async def predict_image(file: UploadFile = File(...)):
 async def predict_video_route(file: UploadFile = File(...)):
     """Analyse une vidéo frame par frame — retourne verdict + timeline."""
     if MODEL is None:
-        raise HTTPException(503, "Modèle non disponible — réessayez dans quelques secondes")
+        raise HTTPException(503, "Modèle non disponible")
 
     allowed = ["video/mp4", "video/avi", "video/quicktime",
                "video/x-matroska", "video/webm", "video/x-msvideo"]
     if file.content_type not in allowed:
-        raise HTTPException(400, "Format vidéo non supporté (MP4, AVI, MOV, MKV)")
+        raise HTTPException(400, "Format vidéo non supporté (MP4, AVI, MOV)")
 
-    # Limite taille : 100 MB
     data = await file.read()
-    if len(data) > 100 * 1024 * 1024:
-        raise HTTPException(400, "Fichier trop volumineux (max 100 MB)")
+    if len(data) > 50 * 1024 * 1024:
+        raise HTTPException(400, "Fichier trop volumineux (max 50 MB)")
 
     try:
         result = predict_video(MODEL, data, DEVICE)
@@ -119,5 +105,6 @@ async def predict_video_route(file: UploadFile = File(...)):
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
+@app.head("/")
 def root():
     return FileResponse("static/index.html")

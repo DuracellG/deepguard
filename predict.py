@@ -11,7 +11,6 @@ from typing import Dict, Any
 
 IMG_SIZE = 224
 
-# Transformations image standard (ImageNet)
 TRANSFORM = T.Compose([
     T.Resize((IMG_SIZE, IMG_SIZE)),
     T.ToTensor(),
@@ -26,14 +25,11 @@ def extract_dct(img_array: np.ndarray) -> np.ndarray:
     dct  = cv2.dct(gray)
     dct  = np.log(np.abs(dct) + 1e-8)
     dct  = (dct - dct.min()) / (dct.max() - dct.min() + 1e-8)
-    return dct[np.newaxis, :, :]  # (1, H, W)
+    return dct[np.newaxis, :, :]
 
 
 def predict_single(model, img: Image.Image, device: str) -> Dict[str, Any]:
-    """
-    Prédit sur une image PIL.
-    Retourne : verdict, score_real, score_fake, confidence
-    """
+    """Prédit sur une image PIL."""
     img    = img.convert("RGB")
     img_np = np.array(img.resize((IMG_SIZE, IMG_SIZE)))
 
@@ -59,13 +55,12 @@ def predict_single(model, img: Image.Image, device: str) -> Dict[str, Any]:
 
 
 def predict_video(model, video_bytes: bytes, device: str,
-                  sample_every: int = 10) -> Dict[str, Any]:
+                  sample_every: int = 30) -> Dict[str, Any]:
     """
     Prédit sur une vidéo (bytes).
-    Analyse 1 frame sur sample_every — retourne verdict + timeline.
+    sample_every=30 → 1 frame/30 pour éviter timeout sur Render gratuit.
     Compatible Windows et Linux.
     """
-    # Fichier temporaire compatible toutes plateformes
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
     try:
         with os.fdopen(tmp_fd, "wb") as f:
@@ -96,7 +91,6 @@ def predict_video(model, video_bytes: bytes, device: str,
         cap.release()
 
     finally:
-        # Nettoyage du fichier temporaire
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
