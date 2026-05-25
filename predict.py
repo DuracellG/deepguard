@@ -2,6 +2,8 @@
 
 import cv2
 import numpy as np
+import os
+import tempfile
 import torch
 import torchvision.transforms as T
 from PIL import Image
@@ -9,7 +11,7 @@ from typing import Dict, Any
 
 IMG_SIZE = 224
 
-# Transformations image standard
+# Transformations image standard (ImageNet)
 TRANSFORM = T.Compose([
     T.Resize((IMG_SIZE, IMG_SIZE)),
     T.ToTensor(),
@@ -60,36 +62,43 @@ def predict_video(model, video_bytes: bytes, device: str,
                   sample_every: int = 10) -> Dict[str, Any]:
     """
     Prédit sur une vidéo (bytes).
-    Analyse 1 frame sur sample_every — retourne verdict + timeline des scores.
+    Analyse 1 frame sur sample_every — retourne verdict + timeline.
+    Compatible Windows et Linux.
     """
-    # Écriture temporaire pour OpenCV
-    tmp_path = "/tmp/deepguard_video.mp4"
-    with open(tmp_path, "wb") as f:
-        f.write(video_bytes)
+    # Fichier temporaire compatible toutes plateformes
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".mp4")
+    try:
+        with os.fdopen(tmp_fd, "wb") as f:
+            f.write(video_bytes)
 
-    cap       = cv2.VideoCapture(tmp_path)
-    fps       = cap.get(cv2.CAP_PROP_FPS) or 25
-    total     = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    scores    = []
-    timeline  = []
-    frame_idx = 0
+        cap       = cv2.VideoCapture(tmp_path)
+        fps       = cap.get(cv2.CAP_PROP_FPS) or 25
+        total     = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        scores    = []
+        timeline  = []
+        frame_idx = 0
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        if frame_idx % sample_every == 0:
-            rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img   = Image.fromarray(rgb)
-            res   = predict_single(model, img, device)
-            scores.append(res["score_fake"])
-            timeline.append({
-                "time" : round(frame_idx / fps, 2),
-                "score": res["score_fake"]
-            })
-        frame_idx += 1
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if frame_idx % sample_every == 0:
+                rgb  = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img  = Image.fromarray(rgb)
+                res  = predict_single(model, img, device)
+                scores.append(res["score_fake"])
+                timeline.append({
+                    "time" : round(frame_idx / fps, 2),
+                    "score": res["score_fake"]
+                })
+            frame_idx += 1
 
-    cap.release()
+        cap.release()
+
+    finally:
+        # Nettoyage du fichier temporaire
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
     if not scores:
         return {"error": "Aucune frame analysée"}
@@ -99,14 +108,14 @@ def predict_video(model, video_bytes: bytes, device: str,
     is_fake    = mean_score > 50.0
 
     return {
-        "verdict"      : "deepfake" if is_fake else "authentic",
-        "label"        : "Deepfake détecté" if is_fake else "Authentique",
-        "score_fake"   : round(mean_score, 2),
-        "score_real"   : round(100 - mean_score, 2),
-        "confidence"   : round(max(mean_score, 100 - mean_score), 2),
-        "max_score"    : round(max_score, 2),
-        "frames_total" : total,
-        "frames_analyzed": len(scores),
-        "timeline"     : timeline,
-        "fps"          : round(fps, 1),
+        "verdict"         : "deepfake" if is_fake else "authentic",
+        "label"           : "Deepfake détecté" if is_fake else "Authentique",
+        "score_fake"      : round(mean_score, 2),
+        "score_real"      : round(100 - mean_score, 2),
+        "confidence"      : round(max(mean_score, 100 - mean_score), 2),
+        "max_score"       : round(max_score, 2),
+        "frames_total"    : total,
+        "frames_analyzed" : len(scores),
+        "timeline"        : timeline,
+        "fps"             : round(fps, 1),
     }

@@ -2,6 +2,7 @@
 
 import os
 import io
+import gdown
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -10,43 +11,65 @@ from PIL import Image
 from model import load_model
 from predict import predict_single, predict_video
 
-# ── Initialisation ────────────────────────────────────────────
-app    = FastAPI(title="DeepGuard API", version="1.0")
-DEVICE = "cpu"   # Render gratuit = CPU uniquement
-MODEL  = None    # Chargé au démarrage
-
+# ── Configuration ─────────────────────────────────────────────
+app        = FastAPI(title="DeepGuard API", version="1.0")
+DEVICE     = "cpu"
+MODEL      = None
 MODEL_PATH = os.getenv("MODEL_PATH", "best_model.pth")
+MODEL_URL  = os.getenv(
+    "MODEL_URL",
+    "https://drive.google.com/uc?id=1XUly96BwbC8xUyZQamQQl91DZbkho8f9"
+)
 
 
 @app.on_event("startup")
 def startup():
+    """Télécharge le modèle depuis Google Drive si absent, puis le charge."""
     global MODEL
+
+    if not os.path.exists(MODEL_PATH):
+        print(f"📥 Modèle absent — téléchargement depuis Google Drive...")
+        try:
+            gdown.download(MODEL_URL, MODEL_PATH, quiet=False, fuzzy=True)
+            print("✅ Téléchargement terminé")
+        except Exception as e:
+            print(f"❌ Échec téléchargement : {e}")
+            return
+
     if os.path.exists(MODEL_PATH):
         MODEL = load_model(MODEL_PATH, DEVICE)
     else:
-        print(f"⚠️  Modèle introuvable : {MODEL_PATH}")
+        print("❌ Modèle introuvable après téléchargement")
 
 
 # ── Routes API ────────────────────────────────────────────────
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": MODEL is not None}
+    """Vérification état du serveur et du modèle."""
+    return {
+        "status"      : "ok",
+        "model_loaded": MODEL is not None,
+        "device"      : DEVICE
+    }
 
 
 @app.post("/predict/image")
 async def predict_image(file: UploadFile = File(...)):
     """Analyse une image — retourne verdict + scores."""
     if MODEL is None:
-        raise HTTPException(503, "Modèle non disponible")
+        raise HTTPException(503, "Modèle non disponible — réessayez dans quelques secondes")
 
-    # Vérification type fichier
     if not file.content_type.startswith("image/"):
         raise HTTPException(400, "Fichier image requis (JPG, PNG, WEBP)")
 
+    # Limite taille : 10 MB
+    data = await file.read()
+    if len(data) > 10 * 1024 * 1024:
+        raise HTTPException(400, "Fichier trop volumineux (max 10 MB)")
+
     try:
-        data  = await file.read()
-        img   = Image.open(io.BytesIO(data))
+        img    = Image.open(io.BytesIO(data))
         result = predict_single(MODEL, img, DEVICE)
         result["filename"] = file.filename
         result["type"]     = "image"
@@ -59,16 +82,19 @@ async def predict_image(file: UploadFile = File(...)):
 async def predict_video_route(file: UploadFile = File(...)):
     """Analyse une vidéo frame par frame — retourne verdict + timeline."""
     if MODEL is None:
-        raise HTTPException(503, "Modèle non disponible")
+        raise HTTPException(503, "Modèle non disponible — réessayez dans quelques secondes")
 
-    # Vérification type fichier
     allowed = ["video/mp4", "video/avi", "video/quicktime",
-               "video/x-matroska", "video/webm"]
+               "video/x-matroska", "video/webm", "video/x-msvideo"]
     if file.content_type not in allowed:
-        raise HTTPException(400, "Format vidéo non supporté (MP4, AVI, MOV)")
+        raise HTTPException(400, "Format vidéo non supporté (MP4, AVI, MOV, MKV)")
+
+    # Limite taille : 100 MB
+    data = await file.read()
+    if len(data) > 100 * 1024 * 1024:
+        raise HTTPException(400, "Fichier trop volumineux (max 100 MB)")
 
     try:
-        data   = await file.read()
         result = predict_video(MODEL, data, DEVICE)
         result["filename"] = file.filename
         result["type"]     = "video"

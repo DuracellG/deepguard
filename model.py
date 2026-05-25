@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import timm
 
+
 class HybridDeepfakeDetector(nn.Module):
 
     def __init__(self):
@@ -19,7 +20,7 @@ class HybridDeepfakeDetector(nn.Module):
             nn.AdaptiveAvgPool2d(1), nn.Flatten()
         )
 
-        # Tête de classification fusionnée
+        # Tête de classification fusionnée (1280 + 64 features)
         self.head = nn.Sequential(
             nn.Linear(1280 + 64, 256), nn.ReLU(),
             nn.Dropout(0.3),
@@ -33,13 +34,12 @@ class HybridDeepfakeDetector(nn.Module):
 
 
 def load_model(model_path: str, device: str = "cpu") -> HybridDeepfakeDetector:
-    """Charge le modèle depuis le fichier .pth sauvegardé dans Colab."""
+    """Charge le modèle depuis le fichier .pth."""
     model = HybridDeepfakeDetector().to(device)
     ckpt  = torch.load(model_path, map_location=device)
-
-    # Supporte les deux formats de sauvegarde (dict ou state_dict direct)
+    # Supporte les deux formats de sauvegarde
     state = ckpt.get("model_state_dict", ckpt)
     model.load_state_dict(state)
     model.eval()
-    print(f"✅ Modèle chargé depuis {model_path}")
+    print(f"✅ Modèle chargé — {sum(p.numel() for p in model.parameters()):,} paramètres")
     return model
