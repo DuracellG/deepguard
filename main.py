@@ -53,6 +53,18 @@ def health():
         "device"      : DEVICE
     }
 
+@app.get("/debug")
+def debug():
+    """Test rapide du modèle sur une image noire synthétique."""
+    import torch
+    import numpy as np
+    from PIL import Image
+    from predict import predict_single
+
+    # Image noire 224x224
+    img = Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
+    result = predict_single(MODEL, img, DEVICE)
+    return result
 
 @app.post("/predict/image")
 async def predict_image(file: UploadFile = File(...)):
