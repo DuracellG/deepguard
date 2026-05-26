@@ -67,6 +67,15 @@
                  width:0%;transition:width .3s}
   .progress-label{font-size:13px;color:var(--muted);margin-top:8px;text-align:center}
 
+
+  /* PREVIEW */
+  .preview-wrap{margin-bottom:20px;text-align:center}
+  .preview-img{max-width:100%;max-height:280px;border-radius:12px;
+               object-fit:cover;border:1px solid var(--border)}
+  .preview-vid{max-width:100%;max-height:280px;border-radius:12px;
+               border:1px solid var(--border)}
+  .preview-label{font-size:12px;color:var(--hint);margin-top:6px}
+
   /* RESULT */
   .result-section{max-width:680px;margin:32px auto;padding:0 16px 60px;display:none}
 
@@ -205,6 +214,11 @@
 <div class="result-section" id="result-section">
 
   <div class="card" id="verdict-card">
+    <div class="preview-wrap" id="preview-wrap" style="display:none">
+      <img id="preview-img" class="preview-img" src="" alt="Aperçu" style="display:none">
+      <video id="preview-vid" class="preview-vid" controls style="display:none"></video>
+      <p class="preview-label" id="preview-label"></p>
+    </div>
     <div class="verdict-header">
       <div class="verdict-icon" id="verdict-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" id="verdict-svg">
@@ -357,6 +371,30 @@ function handleFile(file) {
 
   mode = isImage ? 'image' : 'video';
   setMode(mode);
+
+  // Afficher aperçu
+  const previewWrap = document.getElementById('preview-wrap');
+  const previewImg  = document.getElementById('preview-img');
+  const previewVid  = document.getElementById('preview-vid');
+  const previewLbl  = document.getElementById('preview-label');
+  const url = URL.createObjectURL(file);
+
+  previewWrap.style.display = 'block';
+  if (file.type.startsWith('image/')) {
+    previewImg.src = url;
+    previewImg.style.display = 'block';
+    previewVid.style.display = 'none';
+  } else {
+    previewVid.src = url;
+    previewVid.style.display = 'block';
+    previewImg.style.display = 'none';
+  }
+  previewLbl.textContent = file.name + ' — ' + (file.size / 1024).toFixed(0) + ' Ko';
+
+  // Afficher la section résultat juste pour l'aperçu (avant l'analyse)
+  document.getElementById('result-section').style.display = 'block';
+  document.getElementById('verdict-card').style.opacity = '0.3';
+
   uploadFile(file);
 }
 
@@ -419,6 +457,7 @@ function hideProgress() {
 
 function showResult(data, elapsed, filename) {
   hideProgress();
+  document.getElementById('verdict-card').style.opacity = '1';
 
   const isFake = data.verdict === 'deepfake';
 
@@ -536,6 +575,10 @@ function renderHistory() {
 function resetUI() {
   document.getElementById('result-section').style.display = 'none';
   document.getElementById('file-input').value = '';
+  document.getElementById('preview-wrap').style.display = 'none';
+  document.getElementById('preview-img').src = '';
+  document.getElementById('preview-vid').src = '';
+
   document.querySelector('.hero').scrollIntoView({behavior:'smooth'});
 }
 </script>
