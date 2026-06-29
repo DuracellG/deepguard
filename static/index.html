@@ -384,20 +384,24 @@ async function upload(file){
   fd.append('file', file);
   try {
     animProg();
-    const res  = await fetch('/predict', {method:'POST', body:fd});
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 120000);
+    const res  = await fetch('/predict', {method:'POST', body:fd, signal:controller.signal});
+    clearTimeout(tid);
     const data = await res.json();
     if(!res.ok) throw new Error(data.detail||'Erreur serveur');
     showResult(data);
   } catch(err){
     hideProg();
-    alert('Erreur : '+err.message);
+    if(err.name==='AbortError') alert('Serveur en cours de réveil — réessayez dans 30 secondes.');
+    else alert('Erreur : '+err.message);
   }
 }
 
 let _iv;
 function animProg(){
   const fill=document.getElementById('pf'), lbl=document.getElementById('pl');
-  const msgs=['Chargement…','Détection du visage…','Analyse spatiale…','Analyse DCT…','Classification…'];
+  const msgs=['Connexion au serveur…','Détection du visage…','Analyse spatiale…','Analyse DCT…','Classification…'];
   let pct=0, mi=0;
   _iv=setInterval(()=>{
     pct+=Math.random()*13; if(pct>88)pct=88;
