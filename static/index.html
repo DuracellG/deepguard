@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DeepGuard — Détection de Deepfakes</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#1B5FA8;--blue2:#2B7FD4;--blue-light:#EBF4FF;
+  --green:#1A7A4A;--green-bg:#E8F8EF;
+  --red:#C0392B;--red-bg:#FDF0EF;
+  --amber:#B45309;--amber-bg:#FEF3C7;
+  --bg:#F4F7FB;--white:#fff;
+  --border:#DDE4EF;--text:#1A2233;--muted:#5A6A85;--hint:#9BA8BB;
+  --radius:14px;--shadow:0 4px 28px rgba(27,95,168,.10);
+}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);
+     color:var(--text);min-height:100vh;display:flex;flex-direction:column}
+
+/* NAV */
+nav{background:var(--white);border-bottom:1px solid var(--border);
+    padding:0 32px;height:62px;display:flex;align-items:center;
+    justify-content:space-between;position:sticky;top:0;z-index:100;
+    box-shadow:0 1px 8px rgba(0,0,0,.04)}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo svg{width:28px;height:28px;color:var(--blue)}
+.logo span{font-size:20px;font-weight:700;color:var(--blue);letter-spacing:-.3px}
+.badge{background:var(--blue-light);color:var(--blue);font-size:11px;
+       font-weight:600;padding:4px 10px;border-radius:20px;letter-spacing:.3px}
+
+/* HERO */
+.hero{text-align:center;padding:52px 24px 36px;max-width:680px;margin:0 auto}
+.hero-icon{width:68px;height:68px;background:var(--blue-light);border-radius:18px;
+           display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+.hero-icon svg{width:36px;height:36px;color:var(--blue)}
+h1{font-size:32px;font-weight:800;letter-spacing:-.5px;margin-bottom:12px;line-height:1.25}
+h1 em{font-style:normal;color:var(--blue)}
+.hero p{font-size:15px;color:var(--muted);line-height:1.8;max-width:480px;margin:0 auto}
+
+/* UPLOAD */
+.upload-wrap{max-width:580px;margin:28px auto 0;padding:0 20px}
+.dropzone{border:2px dashed var(--border);border-radius:var(--radius);
+          padding:48px 24px;text-align:center;cursor:pointer;
+          background:var(--white);transition:all .2s}
+.dropzone:hover,.dropzone.drag{border-color:var(--blue);background:var(--blue-light)}
+.dropzone svg{width:50px;height:50px;color:var(--blue2);margin-bottom:14px;opacity:.85}
+.dropzone h3{font-size:16px;font-weight:600;margin-bottom:6px}
+.dropzone p{font-size:13px;color:var(--hint)}
+.btn-browse{display:inline-flex;align-items:center;gap:7px;margin-top:16px;
+  background:var(--blue);color:#fff;border:none;padding:11px 26px;
+  border-radius:9px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.btn-browse:hover{opacity:.88}
+#fi{display:none}
+
+/* PROGRESS */
+.progress-wrap{max-width:580px;margin:18px auto 0;padding:0 20px;display:none}
+.progress-bar{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--blue2));
+               width:0%;transition:width .35s;border-radius:3px}
+.progress-label{font-size:13px;color:var(--muted);margin-top:8px;text-align:center}
+
+/* RESULT */
+.result-wrap{max-width:580px;margin:24px auto 0;padding:0 20px;display:none}
+.result-card{background:var(--white);border-radius:var(--radius);
+             box-shadow:var(--shadow);overflow:hidden}
+
+/* FACE ZONE — image annotée + preview côte à côte */
+.face-zone{display:grid;grid-template-columns:1fr 1fr;gap:0;
+           border-bottom:1px solid var(--border)}
+.face-panel{padding:16px;text-align:center}
+.face-panel:first-child{border-right:1px solid var(--border)}
+.face-panel-title{font-size:11px;font-weight:600;color:var(--hint);
+                  text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+.face-img{width:100%;max-height:200px;object-fit:contain;
+          border-radius:8px;border:1px solid var(--border)}
+.face-count{font-size:12px;color:var(--muted);margin-top:6px}
+
+/* VERDICT */
+.verdict-banner{display:flex;align-items:center;gap:14px;padding:18px 22px}
+.verdict-icon{width:50px;height:50px;border-radius:50%;
+              display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.verdict-icon.real{background:var(--green-bg)}
+.verdict-icon.fake{background:var(--red-bg)}
+.verdict-icon svg{width:24px;height:24px}
+.verdict-icon.real svg{color:var(--green)}
+.verdict-icon.fake svg{color:var(--red)}
+.verdict-label{font-size:22px;font-weight:800;letter-spacing:-.3px}
+.verdict-label.real{color:var(--green)}
+.verdict-label.fake{color:var(--red)}
+.verdict-sub{font-size:13px;color:var(--muted);margin-top:3px}
+
+/* SCORES */
+.scores{padding:0 22px 18px}
+.score-row{margin-bottom:13px}
+.score-head{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px}
+.score-head .val{font-weight:700}
+.val.g{color:var(--green)}.val.r{color:var(--red)}
+.bar{height:9px;background:#EEF2F8;border-radius:5px;overflow:hidden}
+.bar-fill{height:100%;border-radius:5px;transition:width .9s cubic-bezier(.4,0,.2,1)}
+.bar-fill.g{background:linear-gradient(90deg,#27AE60,#2ECC71)}
+.bar-fill.r{background:linear-gradient(90deg,var(--red),#E74C3C)}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:0 22px 18px}
+.metric{background:var(--bg);border-radius:10px;padding:13px 10px;text-align:center}
+.metric .mv{font-size:19px;font-weight:800}
+.metric .ml{font-size:11px;color:var(--hint);margin-top:3px;
+            text-transform:uppercase;letter-spacing:.5px}
+
+/* RISK */
+.risk-row{display:flex;align-items:center;gap:10px;
+          margin:0 22px 18px;padding:12px 14px;border-radius:10px}
+.risk-row.low{background:var(--green-bg)}
+.risk-row.mid{background:var(--amber-bg)}
+.risk-row.high{background:var(--red-bg)}
+.risk-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.risk-row.low .risk-dot{background:var(--green)}
+.risk-row.mid .risk-dot{background:var(--amber)}
+.risk-row.high .risk-dot{background:var(--red)}
+.risk-text{font-size:13px;font-weight:500}
+.risk-row.low .risk-text{color:var(--green)}
+.risk-row.mid .risk-text{color:var(--amber)}
+.risk-row.high .risk-text{color:var(--red)}
+
+/* DCT */
+.dct-row{display:flex;align-items:flex-start;gap:11px;
+         margin:0 22px 18px;padding:13px;background:var(--blue-light);border-radius:10px}
+.dct-row svg{width:17px;height:17px;color:var(--blue);flex-shrink:0;margin-top:1px}
+.dct-row p{font-size:13px;color:#1B4280;line-height:1.6}
+
+/* RESET */
+.reset-btn{display:flex;align-items:center;justify-content:center;gap:8px;
+           width:calc(100% - 44px);margin:0 22px 22px;padding:13px;
+           background:var(--blue);color:#fff;border:none;border-radius:10px;
+           font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s}
+.reset-btn:hover{opacity:.88}
+
+/* HOW */
+.how{max-width:580px;margin:32px auto 0;padding:0 20px}
+.how h2{font-size:17px;font-weight:700;margin-bottom:14px}
+.how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.how-card{background:var(--white);border:1px solid var(--border);
+          border-radius:var(--radius);padding:18px 14px;text-align:center}
+.how-card .hi{width:40px;height:40px;background:var(--blue-light);border-radius:10px;
+              display:flex;align-items:center;justify-content:center;margin:0 auto 10px}
+.how-card .hi svg{width:20px;height:20px;color:var(--blue)}
+.how-card h3{font-size:13px;font-weight:700;margin-bottom:5px}
+.how-card p{font-size:12px;color:var(--muted);line-height:1.6}
+
+/* FOOTER */
+footer{margin-top:auto;padding:28px 24px;text-align:center;
+       border-top:1px solid var(--border);background:var(--white);margin-top:48px}
+footer p{font-size:12px;color:var(--hint);line-height:1.9}
+footer strong{color:var(--blue)}
+
+@media(max-width:520px){
+  h1{font-size:24px}
+  .face-zone{grid-template-columns:1fr}
+  .face-panel:first-child{border-right:none;border-bottom:1px solid var(--border)}
+  .how-grid{grid-template-columns:1fr}
+  nav{padding:0 16px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="logo" href="/">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <polyline points="9 12 11 14 15 10"/>
+    </svg>
+    <span>DeepGuard</span>
+  </a>
+  <span class="badge">M2 IA · PIGIER BÉNIN</span>
+</nav>
+
+<div class="hero">
+  <div class="hero-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="12" cy="8" r="4"/>
+      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+      <path d="M17 3l1.5 1.5M20 6h-2M17 9l1.5-1.5"/>
+    </svg>
+  </div>
+  <h1>Détectez les <em>deepfakes</em><br>en un instant</h1>
+  <p>DeepGuard analyse vos images grâce à une intelligence artificielle hybride — analyse visuelle et fréquentielle DCT — et délimite le visage ciblé.</p>
+</div>
+
+<div class="upload-wrap">
+  <div class="dropzone" id="dz"
+       ondragover="ev('drag')" ondragleave="uv('drag')" ondrop="drop(event)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <polyline points="16 16 12 12 8 16"/>
+      <line x1="12" y1="12" x2="12" y2="21"/>
+      <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+    </svg>
+    <h3>Glissez une image de visage ici</h3>
+    <p>JPG, PNG, WEBP · Maximum 10 MB</p>
+    <button class="btn-browse" onclick="document.getElementById('fi').click()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5">
+        <rect x="3" y="3" width="18" height="18" rx="2"/>
+        <circle cx="8.5" cy="8.5" r="1.5"/>
+        <polyline points="21 15 16 10 5 21"/>
+      </svg>
+      Choisir une image
+    </button>
+  </div>
+  <input type="file" id="fi" accept="image/*" onchange="onFile(this.files[0])">
+</div>
+
+<div class="progress-wrap" id="pw">
+  <div class="progress-bar"><div class="progress-fill" id="pf"></div></div>
+  <p class="progress-label" id="pl">Analyse en cours…</p>
+</div>
+
+<div class="result-wrap" id="rw">
+  <div class="result-card">
+
+    <!-- Images : originale + annotée -->
+    <div class="face-zone">
+      <div class="face-panel">
+        <div class="face-panel-title">Image originale</div>
+        <img class="face-img" id="orig-img" src="" alt="Original">
+        <div class="face-count" id="fname-lbl">—</div>
+      </div>
+      <div class="face-panel">
+        <div class="face-panel-title">Visage détecté</div>
+        <img class="face-img" id="annot-img" src="" alt="Annoté">
+        <div class="face-count" id="face-count-lbl">—</div>
+      </div>
+    </div>
+
+    <!-- Verdict -->
+    <div class="verdict-banner">
+      <div class="verdict-icon" id="vi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.5" id="vs">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+      </div>
+      <div>
+        <div class="verdict-label" id="vl">—</div>
+        <div class="verdict-sub" id="vsub">—</div>
+      </div>
+    </div>
+
+    <!-- Scores -->
+    <div class="scores">
+      <div class="score-row">
+        <div class="score-head">
+          <span>Score Authentique</span>
+          <span class="val g" id="sr">—</span>
+        </div>
+        <div class="bar"><div class="bar-fill g" id="br" style="width:0%"></div></div>
+      </div>
+      <div class="score-row">
+        <div class="score-head">
+          <span>Score Deepfake</span>
+          <span class="val r" id="sf">—</span>
+        </div>
+        <div class="bar"><div class="bar-fill r" id="bf" style="width:0%"></div></div>
+      </div>
+    </div>
+
+    <!-- Métriques -->
+    <div class="metrics">
+      <div class="metric">
+        <div class="mv" id="mc">—</div>
+        <div class="ml">Confiance</div>
+      </div>
+      <div class="metric">
+        <div class="mv" id="mt">—</div>
+        <div class="ml">Temps</div>
+      </div>
+      <div class="metric">
+        <div class="mv" id="mf">—</div>
+        <div class="ml">Visage(s)</div>
+      </div>
+    </div>
+
+    <!-- Risque -->
+    <div class="risk-row" id="rr">
+      <div class="risk-dot"></div>
+      <span class="risk-text" id="rt">—</span>
+    </div>
+
+    <!-- DCT -->
+    <div class="dct-row">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M2 12h2M20 12h2M12 2v2M12 20v2"/>
+        <path d="M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41"/>
+        <circle cx="12" cy="12" r="4"/>
+      </svg>
+      <p id="dct-msg">—</p>
+    </div>
+
+    <!-- Reset -->
+    <button class="reset-btn" onclick="reset()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.5">
+        <polyline points="1 4 1 10 7 10"/>
+        <path d="M3.51 15a9 9 0 1 0 .49-4.49"/>
+      </svg>
+      Analyser une autre image
+    </button>
+
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<div class="how" id="how">
+  <h2>Comment ça fonctionne</h2>
+  <div class="how-grid">
+    <div class="how-card">
+      <div class="hi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+      </div>
+      <h3>1. Upload</h3>
+      <p>Sélectionnez ou glissez une image contenant un visage humain</p>
+    </div>
+    <div class="how-card">
+      <div class="hi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="8" r="4"/>
+          <path d="M6 20v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+          <line x1="18" y1="4" x2="18" y2="8"/><line x1="16" y1="6" x2="20" y2="6"/>
+        </svg>
+      </div>
+      <h3>2. Détection</h3>
+      <p>Le visage est localisé et délimité automatiquement dans l'image</p>
+    </div>
+    <div class="how-card">
+      <div class="hi">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <polyline points="9 12 11 14 15 10"/>
+        </svg>
+      </div>
+      <h3>3. Analyse & Verdict</h3>
+      <p>Analyse hybride spatiale + DCT → score de confiance en moins d'1 seconde</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>
+    <strong>DeepGuard</strong> — Système Intelligent de Détection de Deepfakes Faciaux<br>
+    Mémoire M2 IA &amp; Big Data · <strong>GNANGNON Dorel Médéliac</strong> · PIGIER BÉNIN · 2025–2026<br>
+    Modèle : HybridDeepfakeDetector · EfficientNet-B0 + DCT · Accuracy 99,93% · AUC-ROC 0,99999
+  </p>
+</footer>
+
+<script>
+let t0;
+
+function ev(c){ document.getElementById('dz').classList.add(c) }
+function uv(c){ document.getElementById('dz').classList.remove(c) }
+
+function drop(e){
+  e.preventDefault(); uv('drag');
+  const f = e.dataTransfer.files[0];
+  if(f) onFile(f);
+}
+
+function onFile(file){
+  if(!file || !file.type.startsWith('image/')) return alert('Format non supporté.');
+  // Aperçu immédiat côté original
+  document.getElementById('orig-img').src  = URL.createObjectURL(file);
+  document.getElementById('fname-lbl').textContent = file.name + ' · ' + (file.size/1024).toFixed(0)+' Ko';
+  upload(file);
+}
+
+async function upload(file){
+  t0 = Date.now();
+  showProg();
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    animProg();
+    const res  = await fetch('/predict', {method:'POST', body:fd});
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.detail||'Erreur serveur');
+    showResult(data);
+  } catch(err){
+    hideProg();
+    alert('Erreur : '+err.message);
+  }
+}
+
+let _iv;
+function animProg(){
+  const fill=document.getElementById('pf'), lbl=document.getElementById('pl');
+  const msgs=['Chargement…','Détection du visage…','Analyse spatiale…','Analyse DCT…','Classification…'];
+  let pct=0, mi=0;
+  _iv=setInterval(()=>{
+    pct+=Math.random()*13; if(pct>88)pct=88;
+    fill.style.width=pct+'%';
+    if(pct>(mi+1)*18&&mi<msgs.length-1) lbl.textContent=msgs[++mi];
+  },280);
+}
+function showProg(){ document.getElementById('pw').style.display='block'; document.getElementById('rw').style.display='none' }
+function hideProg(){ clearInterval(_iv); document.getElementById('pf').style.width='100%'; setTimeout(()=>document.getElementById('pw').style.display='none',400) }
+
+function showResult(d){
+  hideProg();
+  const fake = d.verdict==='deepfake';
+  const el   = ((Date.now()-t0)/1000).toFixed(2)+'s';
+
+  // Image annotée
+  if(d.annotated_img) document.getElementById('annot-img').src = d.annotated_img;
+  document.getElementById('face-count-lbl').textContent =
+    d.faces_count > 0
+      ? d.faces_count + ' visage(s) détecté(s)'
+      : 'Aucun visage détecté (analyse globale)';
+
+  // Verdict
+  const vi=document.getElementById('vi'), vs=document.getElementById('vs');
+  vi.className='verdict-icon '+(fake?'fake':'real');
+  vs.innerHTML=fake
+    ?'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
+    :'<polyline points="20 6 9 17 4 12"/>';
+  document.getElementById('vl').textContent=d.label;
+  document.getElementById('vl').className='verdict-label '+(fake?'fake':'real');
+  document.getElementById('vsub').textContent=document.getElementById('fname-lbl').textContent;
+
+  // Scores
+  document.getElementById('sr').textContent=d.score_real+'%';
+  document.getElementById('sf').textContent=d.score_fake+'%';
+  setTimeout(()=>{
+    document.getElementById('br').style.width=d.score_real+'%';
+    document.getElementById('bf').style.width=d.score_fake+'%';
+  },60);
+
+  // Métriques
+  document.getElementById('mc').textContent=d.confidence+'%';
+  document.getElementById('mt').textContent=el;
+  document.getElementById('mf').textContent=d.faces_count||'—';
+
+  // Risque
+  const rm={Faible:'low',Modéré:'mid',Élevé:'high'};
+  document.getElementById('rr').className='risk-row '+(rm[d.risk]||'low');
+  document.getElementById('rt').textContent='Niveau de risque : '+d.risk+' (seuil : 75%)';
+
+  // DCT
+  document.getElementById('dct-msg').textContent=fake
+    ?'Anomalie spectrale détectée dans les hautes fréquences — signature caractéristique d\'un modèle de diffusion (déficit énergétique haute fréquence).'
+    :'Signature spectrale cohérente avec un visage authentique — aucune anomalie fréquentielle détectée par la branche DCT.';
+
+  document.getElementById('rw').style.display='block';
+  document.getElementById('how').style.display='none';
+  document.getElementById('rw').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function reset(){
+  document.getElementById('rw').style.display='none';
+  document.getElementById('how').style.display='block';
+  document.getElementById('fi').value='';
+  ['br','bf'].forEach(id=>document.getElementById(id).style.width='0%');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+</script>
+</body>
+</html>
