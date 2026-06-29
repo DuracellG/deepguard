@@ -5,7 +5,8 @@ import timm
 class HybridDeepfakeDetector(nn.Module):
     def __init__(self):
         super().__init__()
-        self.spatial = timm.create_model('efficientnet_b0', pretrained=False, num_classes=0)
+        self.spatial = timm.create_model(
+            'efficientnet_b0', pretrained=False, num_classes=0)
         self.freq = nn.Sequential(
             nn.Conv2d(1,32,3,padding=1), nn.ReLU(), nn.MaxPool2d(2),
             nn.Conv2d(32,64,3,padding=1), nn.ReLU(),
@@ -22,5 +23,8 @@ def load_model(path, device="cpu"):
     ckpt  = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(ckpt.get("model_state_dict", ckpt))
     model.eval()
+    # Libérer la mémoire des gradients — non nécessaires en inférence
+    for p in model.parameters():
+        p.requires_grad_(False)
     print(f"✅ {sum(p.numel() for p in model.parameters()):,} paramètres")
     return model

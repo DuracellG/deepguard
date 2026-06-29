@@ -2,7 +2,7 @@ services:
   - type: web
     name: deepguard
     env: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install torch==2.2.2+cpu torchvision==0.17.2+cpu --index-url https://download.pytorch.org/whl/cpu && pip install fastapi==0.115.0 uvicorn==0.30.6 python-multipart==0.0.9 timm==1.0.9 opencv-python-headless Pillow numpy
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120
     envVars:
       - key: MODEL_PATH
