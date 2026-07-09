@@ -12,8 +12,11 @@ class HybridDeepfakeDetector(nn.Module):
             nn.Conv2d(32,64,3,padding=1), nn.ReLU(),
             nn.AdaptiveAvgPool2d(1), nn.Flatten()
         )
+        # Tête V3 : BatchNorm1d ajouté, Dropout 0.3 → 0.5.
+        # model.eval() au chargement est indispensable (fige BatchNorm, coupe Dropout).
         self.head = nn.Sequential(
-            nn.Linear(1344,256), nn.ReLU(), nn.Dropout(0.3), nn.Linear(256,2))
+            nn.Linear(1344,256), nn.BatchNorm1d(256), nn.ReLU(),
+            nn.Dropout(0.5), nn.Linear(256,2))
 
     def forward(self, img, freq):
         return self.head(torch.cat([self.spatial(img), self.freq(freq)], 1))
