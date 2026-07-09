@@ -5,5 +5,9 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 120
     envVars:
+      # torch 2.2.2 n'a pas de wheels au-delà de Python 3.12 ;
+      # le défaut Render (3.14) fait échouer le build.
+      - key: PYTHON_VERSION
+        value: 3.12.7
       - key: MODEL_PATH
         value: best_model.pth
