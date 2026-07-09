@@ -414,24 +414,26 @@ function hideProg(){ clearInterval(_iv); document.getElementById('pf').style.wid
 
 function showResult(d){
   hideProg();
-  const fake = d.verdict==='deepfake';
-  const el   = ((Date.now()-t0)/1000).toFixed(2)+'s';
+  const cls = d.verdict==='deepfake' ? 'fake' : 'real';
+  const el  = ((Date.now()-t0)/1000).toFixed(2)+'s';
 
   // Image annotée
   if(d.annotated_img) document.getElementById('annot-img').src = d.annotated_img;
   document.getElementById('face-count-lbl').textContent =
     d.faces_count > 0
-      ? d.faces_count + ' visage(s) détecté(s)'
+      ? d.faces_count + ' visage(s) détecté(s) · analyse sur visage recadré'
       : 'Aucun visage détecté (analyse globale)';
 
   // Verdict
   const vi=document.getElementById('vi'), vs=document.getElementById('vs');
-  vi.className='verdict-icon '+(fake?'fake':'real');
-  vs.innerHTML=fake
-    ?'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>'
-    :'<polyline points="20 6 9 17 4 12"/>';
+  const icons={
+    fake:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+    real:'<polyline points="20 6 9 17 4 12"/>'
+  };
+  vi.className='verdict-icon '+cls;
+  vs.innerHTML=icons[cls];
   document.getElementById('vl').textContent=d.label;
-  document.getElementById('vl').className='verdict-label '+(fake?'fake':'real');
+  document.getElementById('vl').className='verdict-label '+cls;
   document.getElementById('vsub').textContent=document.getElementById('fname-lbl').textContent;
 
   // Scores
@@ -450,12 +452,10 @@ function showResult(d){
   // Risque
   const rm={Faible:'low',Modéré:'mid',Élevé:'high'};
   document.getElementById('rr').className='risk-row '+(rm[d.risk]||'low');
-  document.getElementById('rt').textContent='Niveau de risque : '+d.risk+' (seuil : 75%)';
+  document.getElementById('rt').textContent='Niveau de risque : '+d.risk+' (seuil deepfake : 75%)';
 
-  // DCT
-  document.getElementById('dct-msg').textContent=fake
-    ?'Anomalie spectrale détectée dans les hautes fréquences — signature caractéristique d\'un modèle de diffusion (déficit énergétique haute fréquence).'
-    :'Signature spectrale cohérente avec un visage authentique — aucune anomalie fréquentielle détectée par la branche DCT.';
+  // DCT — message calculé côté serveur à partir de mesures réelles
+  document.getElementById('dct-msg').textContent=d.dct_analysis||'—';
 
   document.getElementById('rw').style.display='block';
   document.getElementById('how').style.display='none';

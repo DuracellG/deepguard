@@ -20,11 +20,16 @@ class HybridDeepfakeDetector(nn.Module):
 
 def load_model(path, device="cpu"):
     model = HybridDeepfakeDetector().to(device)
-    ckpt  = torch.load(path, map_location=device, weights_only=False)
+    try:
+        ckpt = torch.load(path, map_location=device, weights_only=True)
+    except Exception:
+        # Checkpoint contenant des objets non-tenseurs (ex. état d'optimiseur picklé).
+        # Acceptable uniquement parce que le fichier est produit par nous.
+        ckpt = torch.load(path, map_location=device, weights_only=False)
     model.load_state_dict(ckpt.get("model_state_dict", ckpt))
     model.eval()
     # Libérer la mémoire des gradients — non nécessaires en inférence
     for p in model.parameters():
         p.requires_grad_(False)
-    print(f"✅ {sum(p.numel() for p in model.parameters()):,} paramètres")
+    print(f"[OK] {sum(p.numel() for p in model.parameters()):,} parametres")
     return model
