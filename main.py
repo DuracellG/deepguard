@@ -3,6 +3,8 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
+import torch
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +24,9 @@ MAX_BYTES  = 10 * 1024 * 1024
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global MODEL
+    # 0,1 vCPU sur le plan gratuit Render : le multi-threading de torch
+    # gaspille mémoire et temps de commutation.
+    torch.set_num_threads(1)
     if os.path.exists(MODEL_PATH):
         MODEL = load_model(MODEL_PATH, DEVICE)
         print("[OK] Modele pret")

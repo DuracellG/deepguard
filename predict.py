@@ -7,6 +7,8 @@ THRESHOLD       = 0.75   # au-delà : deepfake
 FACE_MARGIN     = 0.30   # marge autour du visage recadré pour l'analyse
 MAX_ANNOT_SIDE  = 800    # taille max de l'image annotée renvoyée en base64
 MAX_DETECT_SIDE = 1280   # taille max soumise au détecteur (les boîtes sont remises à l'échelle)
+MAX_WORK_SIDE   = 1600   # résolution de travail max : borne la mémoire du pipeline
+                         # (une photo 4000×3000 = ~36 MB par copie, OOM sur 512 MB)
 
 TRANSFORM = T.Compose([
     T.Resize((IMG_SIZE, IMG_SIZE)),
@@ -152,7 +154,11 @@ def dct_message(verdict: str, hf_ratio: float, fake_pct: float) -> str:
 
 
 def predict_image(model, img: Image.Image, device: str) -> dict:
-    img      = img.convert("RGB")
+    img = img.convert("RGB")
+    # Borner la résolution de travail : l'analyse se fait sur un crop 224×224,
+    # aucune précision utile n'est perdue et la mémoire reste bornée.
+    if max(img.size) > MAX_WORK_SIDE:
+        img.thumbnail((MAX_WORK_SIDE, MAX_WORK_SIDE))
     arr_orig = np.array(img)
 
     # --- Détection du visage principal ---

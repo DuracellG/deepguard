@@ -394,6 +394,7 @@ async function upload(file){
   } catch(err){
     hideProg();
     if(err.name==='AbortError') alert('Serveur en cours de réveil — réessayez dans 30 secondes.');
+    else if(err instanceof TypeError) alert('Connexion interrompue — le serveur a peut-être redémarré. Réessayez dans 30 secondes.');
     else alert('Erreur : '+err.message);
   }
 }
