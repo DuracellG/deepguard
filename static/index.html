@@ -82,12 +82,15 @@ h1 em{font-style:normal;color:var(--blue)}
               display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .verdict-icon.real{background:var(--green-bg)}
 .verdict-icon.fake{background:var(--red-bg)}
+.verdict-icon.warn{background:var(--amber-bg)}
 .verdict-icon svg{width:24px;height:24px}
 .verdict-icon.real svg{color:var(--green)}
 .verdict-icon.fake svg{color:var(--red)}
+.verdict-icon.warn svg{color:var(--amber)}
 .verdict-label{font-size:22px;font-weight:800;letter-spacing:-.3px}
 .verdict-label.real{color:var(--green)}
 .verdict-label.fake{color:var(--red)}
+.verdict-label.warn{color:var(--amber)}
 .verdict-sub{font-size:13px;color:var(--muted);margin-top:3px}
 
 /* SCORES */
@@ -415,7 +418,8 @@ function hideProg(){ clearInterval(_iv); document.getElementById('pf').style.wid
 
 function showResult(d){
   hideProg();
-  const cls = d.verdict==='deepfake' ? 'fake' : 'real';
+  const noface = d.verdict==='no_face';
+  const cls = noface ? 'warn' : d.verdict==='deepfake' ? 'fake' : 'real';
   const el  = ((Date.now()-t0)/1000).toFixed(2)+'s';
 
   // Image annotée
@@ -425,38 +429,48 @@ function showResult(d){
       ? d.faces_count + ' visage(s) détecté(s)'
       : 'Aucun visage détecté';
 
+  // Sections masquées quand il n'y a pas de visage (aucune classification faite)
+  ['.scores','.metrics','#rr','.dct-row'].forEach(s=>{
+    document.querySelector(s).style.display = noface ? 'none' : '';
+  });
+
   // Verdict
   const vi=document.getElementById('vi'), vs=document.getElementById('vs');
   const icons={
     fake:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
-    real:'<polyline points="20 6 9 17 4 12"/>'
+    real:'<polyline points="20 6 9 17 4 12"/>',
+    warn:'<line x1="12" y1="7" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12" y2="17"/>'
   };
   vi.className='verdict-icon '+cls;
   vs.innerHTML=icons[cls];
   document.getElementById('vl').textContent=d.label;
   document.getElementById('vl').className='verdict-label '+cls;
-  document.getElementById('vsub').textContent=document.getElementById('fname-lbl').textContent;
+  document.getElementById('vsub').textContent = noface
+    ? 'Analyse non effectuée — l\'image ne contient pas de visage exploitable'
+    : document.getElementById('fname-lbl').textContent;
 
-  // Scores
-  document.getElementById('sr').textContent=d.score_real+'%';
-  document.getElementById('sf').textContent=d.score_fake+'%';
-  setTimeout(()=>{
-    document.getElementById('br').style.width=d.score_real+'%';
-    document.getElementById('bf').style.width=d.score_fake+'%';
-  },60);
+  if(!noface){
+    // Scores
+    document.getElementById('sr').textContent=d.score_real+'%';
+    document.getElementById('sf').textContent=d.score_fake+'%';
+    setTimeout(()=>{
+      document.getElementById('br').style.width=d.score_real+'%';
+      document.getElementById('bf').style.width=d.score_fake+'%';
+    },60);
 
-  // Métriques
-  document.getElementById('mc').textContent=d.confidence+'%';
-  document.getElementById('mt').textContent=el;
-  document.getElementById('mf').textContent=d.faces_count||'—';
+    // Métriques
+    document.getElementById('mc').textContent=d.confidence+'%';
+    document.getElementById('mt').textContent=el;
+    document.getElementById('mf').textContent=d.faces_count||'—';
 
-  // Risque
-  const rm={Faible:'low',Modéré:'mid',Élevé:'high'};
-  document.getElementById('rr').className='risk-row '+(rm[d.risk]||'low');
-  document.getElementById('rt').textContent='Niveau de risque : '+d.risk+' (seuil deepfake : 75%)';
+    // Risque
+    const rm={Faible:'low',Modéré:'mid',Élevé:'high'};
+    document.getElementById('rr').className='risk-row '+(rm[d.risk]||'low');
+    document.getElementById('rt').textContent='Niveau de risque : '+d.risk+' (seuil deepfake : 75%)';
 
-  // DCT — message calculé côté serveur à partir de mesures réelles
-  document.getElementById('dct-msg').textContent=d.dct_analysis||'—';
+    // DCT — message calculé côté serveur à partir de mesures réelles
+    document.getElementById('dct-msg').textContent=d.dct_analysis||'—';
+  }
 
   document.getElementById('rw').style.display='block';
   document.getElementById('how').style.display='none';

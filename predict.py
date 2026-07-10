@@ -26,6 +26,7 @@ _DETECTOR_LOCK = threading.Lock()
 COLORS = {
     "deepfake" : (192, 57, 43),   # rouge
     "authentic": (26, 122, 74),   # vert
+    "no_face"  : (90, 106, 133),  # gris neutre (aucun cadre dessiné)
 }
 # ASCII uniquement : la police bitmap par défaut de PIL ne rend pas ⚠ / ✓
 BADGES = {
@@ -147,8 +148,17 @@ def predict_image(model, img: Image.Image, device: str) -> dict:
         img.thumbnail((MAX_WORK_SIDE, MAX_WORK_SIDE))
     arr_orig = np.array(img)
 
-    # --- Détection du visage principal (affichage du cadre uniquement) ---
+    # --- Détection du visage principal ---
+    # Sans visage, l'image est hors du domaine d'entraînement (dataset AI Face) :
+    # on le signale et on ne classifie pas.
     faces = detect_faces(arr_orig)
+    if not faces:
+        return {
+            "verdict"      : "no_face",
+            "label"        : "Aucun visage détecté",
+            "faces_count"  : 0,
+            "annotated_img": draw_face_box(img, [], "no_face"),
+        }
 
     # --- Analyse sur l'image ENTIÈRE ---
     # Le modèle est entraîné sur le dataset AI Face (portraits cadrés avec
