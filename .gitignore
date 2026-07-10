@@ -2,4 +2,3 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-best_model_v3.pth
