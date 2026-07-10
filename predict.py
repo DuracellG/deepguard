@@ -4,7 +4,6 @@ from PIL import Image, ImageDraw
 
 IMG_SIZE        = 224
 THRESHOLD       = 0.75   # au-delà : deepfake
-FACE_MARGIN     = 0.30   # marge autour du visage recadré pour l'analyse
 MAX_ANNOT_SIDE  = 800    # taille max de l'image annotée renvoyée en base64
 MAX_DETECT_SIDE = 1280   # taille max soumise au détecteur (les boîtes sont remises à l'échelle)
 MAX_WORK_SIDE   = 1600   # résolution de travail max : borne la mémoire du pipeline
@@ -74,19 +73,6 @@ def detect_faces(img_rgb: np.ndarray):
     best = max(faces, key=lambda f: f[2] * f[3])
     x, y, bw, bh = (best[:4] / scale).astype(int)
     return [(max(0, x), max(0, y), bw, bh)]
-
-
-def crop_face(img: Image.Image, face) -> Image.Image:
-    """Recadre le visage avec une marge, borné aux dimensions de l'image.
-    Le modèle étant entraîné sur des crops de visages, l'inférence doit
-    recevoir la même chose — pas la scène entière."""
-    x, y, w, h = [int(v) for v in face]
-    mx, my = int(w * FACE_MARGIN), int(h * FACE_MARGIN)
-    left   = max(0, x - mx)
-    top    = max(0, y - my)
-    right  = min(img.width,  x + w + mx)
-    bottom = min(img.height, y + h + my)
-    return img.crop((left, top, right, bottom))
 
 
 def draw_face_box(img_pil: Image.Image, faces, verdict: str) -> str:
@@ -161,15 +147,16 @@ def predict_image(model, img: Image.Image, device: str) -> dict:
         img.thumbnail((MAX_WORK_SIDE, MAX_WORK_SIDE))
     arr_orig = np.array(img)
 
-    # --- Détection du visage principal ---
-    faces  = detect_faces(arr_orig)
-    # Le modèle est entraîné sur des crops de visages : analyser le visage
-    # recadré quand il y en a un, l'image entière sinon.
-    region = crop_face(img, faces[0]) if faces else img
+    # --- Détection du visage principal (affichage du cadre uniquement) ---
+    faces = detect_faces(arr_orig)
 
-    # --- Analyse sur la région redimensionnée ---
-    arr_224 = np.array(region.resize((IMG_SIZE, IMG_SIZE)))
-    img_t   = TRANSFORM(region).unsqueeze(0).to(device)
+    # --- Analyse sur l'image ENTIÈRE ---
+    # Le modèle est entraîné sur le dataset AI Face (portraits cadrés avec
+    # arrière-plan, spécialisation modèles de diffusion) : l'inférence doit
+    # recevoir l'image entière. Vérifié empiriquement sur Macron_2.png :
+    # 87,11 % de score deepfake en image entière, 0 % sur crop serré.
+    arr_224 = np.array(img.resize((IMG_SIZE, IMG_SIZE)))
+    img_t   = TRANSFORM(img).unsqueeze(0).to(device)
     freq_t  = torch.tensor(extract_dct(arr_224)).unsqueeze(0).float().to(device)
 
     with torch.no_grad():
@@ -195,7 +182,6 @@ def predict_image(model, img: Image.Image, device: str) -> dict:
         "confidence"     : round(max(real, fake) * 100, 2),
         "risk"           : risk,
         "faces_count"    : len(faces),
-        "analyzed_region": "face" if faces else "full",
         "dct_analysis"   : dct_message(verdict, hf_ratio, fake * 100),
         "annotated_img"  : annotated_img,   # base64 PNG avec boîtes
     }

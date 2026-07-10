@@ -422,8 +422,8 @@ function showResult(d){
   if(d.annotated_img) document.getElementById('annot-img').src = d.annotated_img;
   document.getElementById('face-count-lbl').textContent =
     d.faces_count > 0
-      ? d.faces_count + ' visage(s) détecté(s) · analyse sur visage recadré'
-      : 'Aucun visage détecté (analyse globale)';
+      ? d.faces_count + ' visage(s) détecté(s)'
+      : 'Aucun visage détecté';
 
   // Verdict
   const vi=document.getElementById('vi'), vs=document.getElementById('vs');
