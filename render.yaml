@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: deepguard
+    name: truthface
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt

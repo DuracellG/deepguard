@@ -13,7 +13,7 @@ from PIL import Image
 from model import load_model
 from predict import predict_image
 
-logger = logging.getLogger("deepguard")
+logger = logging.getLogger("truthface")
 
 DEVICE     = "cpu"
 MODEL      = None
@@ -33,7 +33,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="DeepGuard", version="3.0", lifespan=lifespan)
+app = FastAPI(title="TruthFace", version="3.0", lifespan=lifespan)
 
 
 @app.get("/health")
